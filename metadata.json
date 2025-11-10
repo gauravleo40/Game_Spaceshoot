@@ -1,0 +1,5 @@
+{
+  "name": "Falling Objects Game",
+  "description": "A simple browser-based game where you move a character to catch falling objects to score points within a time limit.",
+  "requestFramePermissions": []
+}
