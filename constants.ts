@@ -15,4 +15,4 @@ export const BULLET_HEIGHT = 4;
 
 
 // Changed from collectibles to obstacles
-export const OBSTACLE_EMOJIS = ['🪨', '☄️'];
+export const OBSTACLE_EMOJIS = ['🪨', '☄️', '💎', '🔥', '🌟', '⚡', '💥', '🌑'];

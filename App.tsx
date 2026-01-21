@@ -22,8 +22,8 @@ interface StartScreenProps {
 const StartScreen: React.FC<StartScreenProps> = ({ onPlay }) => (
   <div className="text-center bg-slate-800 p-8 md:p-12 rounded-2xl shadow-2xl border-2 border-cyan-500/50 w-full max-w-lg animate-[fadeIn_0.5s_ease-out]">
     <h1 className="text-5xl md:text-6xl font-bold mb-4 text-cyan-400 drop-shadow-[0_2px_2px_rgba(0,255,255,0.4)]">Rock Blaster!</h1>
-    <p className="text-lg md:text-xl mb-6 text-slate-300">Use Arrow Keys to move and Spacebar to shoot the falling rocks.</p>
-    <p className="text-md md:text-lg mb-8 text-slate-400">Press 'P' to Pause/Resume.</p>
+    <p className="text-lg md:text-xl mb-6 text-slate-300">Use Arrow Keys to move and Spacebar to shoot the falling rocks. Avoid touching them!</p>
+    <p className="text-md md:text-lg mb-8 text-slate-400">Press 'P' to Pause/Resume. Press 'Q' to Quit.</p>
     <button
       onClick={onPlay}
       className="bg-cyan-500 hover:bg-cyan-400 text-white font-bold py-4 px-10 rounded-full text-2xl transition-transform transform hover:scale-105 shadow-lg shadow-cyan-500/50"
@@ -85,14 +85,13 @@ const App: React.FC = () => {
     setGameState(GameState.GameOver);
   }, []);
   
-  // Game timer countdown (now pauses correctly)
+  // Game timer countdown (for display only, game ends on 'q' press)
   useEffect(() => {
     if (gameState === GameState.Playing) {
       timerRef.current = window.setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
-            gameOver();
             return 0;
           }
           return prev - 1;
@@ -102,7 +101,7 @@ const App: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState, gameOver]);
+  }, [gameState]);
 
   // Object spawner (now pauses correctly)
   useEffect(() => {
@@ -136,6 +135,12 @@ const App: React.FC = () => {
           return prev;
         });
         return; // Stop further processing
+      }
+
+      // End game functionality
+      if (e.key.toLowerCase() === 'q') {
+        gameOver();
+        return;
       }
 
       // Do not process movement/shooting if paused
@@ -200,7 +205,20 @@ const App: React.FC = () => {
         setScore(s => s + scoreIncrease);
     }
 
-    // 2. Update objects: filter hits, move down, filter off-screen
+    // 2. Detect collisions between player and objects
+    for (const obj of objects) {
+        if (
+            playerPosition.x < obj.x + OBJECT_SIZE &&
+            playerPosition.x + PLAYER_WIDTH > obj.x &&
+            playerPosition.y < obj.y + OBJECT_SIZE &&
+            playerPosition.y + PLAYER_HEIGHT > obj.y
+        ) {
+            gameOver();
+            return; // Stop the game loop
+        }
+    }
+
+    // 3. Update objects: filter hits, move down, filter off-screen
     setObjects(prev =>
         prev
             .filter(obj => !hitObjectIds.has(obj.id))
@@ -208,7 +226,7 @@ const App: React.FC = () => {
             .filter(obj => obj.y < 100)
     );
 
-    // 3. Update bullets: filter hits, move up, filter off-screen
+    // 4. Update bullets: filter hits, move up, filter off-screen
     setBullets(prev =>
         prev
             .filter(bullet => !hitBulletIds.has(bullet.id))
@@ -216,7 +234,7 @@ const App: React.FC = () => {
             .filter(bullet => bullet.y + BULLET_HEIGHT > 0)
     );
 
-  }, [bullets, objects]);
+  }, [bullets, objects, playerPosition.x, playerPosition.y, gameOver]);
 
   // Effect to run the game loop
   useEffect(() => {
