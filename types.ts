@@ -10,6 +10,7 @@ export interface FallingObject {
   x: number; // percentage from left
   y: number; // percentage from top
   emoji: string;
+  type: 'obstacle' | 'powerup';
 }
 
 // New interface for bullet objects

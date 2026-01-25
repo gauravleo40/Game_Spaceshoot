@@ -12,6 +12,7 @@ import {
   BULLET_SPEED,
   BULLET_WIDTH,
   BULLET_HEIGHT,
+  POWER_UP_EMOJIS,
 } from './constants';
 
 // --- UI Components (defined outside App to prevent re-creation on re-renders) ---
@@ -63,6 +64,7 @@ const App: React.FC = () => {
   const [objects, setObjects] = useState<FallingObject[]>([]);
   // Add state for bullets
   const [bullets, setBullets] = useState<Bullet[]>([]);
+  const [doubleShot, setDoubleShot] = useState<boolean>(false);
   
   const gameLoopRef = useRef<number>();
   const objectSpawnerRef = useRef<number>();
@@ -70,10 +72,11 @@ const App: React.FC = () => {
 
   const resetGame = useCallback(() => {
     setScore(0);
-    setTimeLeft(GAME_DURATION_SECONDS);
+    setTimeLeft(0); // Start from 0
     setPlayerPosition({ x: 50 - PLAYER_WIDTH / 2, y: 100 - PLAYER_HEIGHT * 1.5 });
     setObjects([]);
     setBullets([]); // Reset bullets
+    setDoubleShot(false);
   }, []);
   
   const startGame = useCallback(() => {
@@ -89,13 +92,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (gameState === GameState.Playing) {
       timerRef.current = window.setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
+        setTimeLeft(prev => prev + 1);
       }, 1000);
     }
     return () => {
@@ -107,11 +104,16 @@ const App: React.FC = () => {
   useEffect(() => {
     if (gameState === GameState.Playing) {
       objectSpawnerRef.current = window.setInterval(() => {
+        const isPowerUp = Math.random() < 0.2; // 20% chance for power-up
+        const emoji = isPowerUp
+          ? POWER_UP_EMOJIS[Math.floor(Math.random() * POWER_UP_EMOJIS.length)]
+          : OBSTACLE_EMOJIS[Math.floor(Math.random() * OBSTACLE_EMOJIS.length)];
         const newObject: FallingObject = {
           id: Date.now() + Math.random(),
           x: Math.random() * (100 - OBJECT_SIZE),
           y: -OBJECT_SIZE, // Start just above the screen
-          emoji: OBSTACLE_EMOJIS[Math.floor(Math.random() * OBSTACLE_EMOJIS.length)],
+          emoji,
+          type: isPowerUp ? 'powerup' : 'obstacle',
         };
         setObjects(prev => [...prev, newObject]);
       }, OBJECT_SPAWN_INTERVAL_MS);
@@ -148,14 +150,27 @@ const App: React.FC = () => {
 
       if (e.key === ' ') { // Spacebar to shoot
         e.preventDefault();
-        setBullets(prev => [
-          ...prev,
+        const bulletX = playerPosition.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2;
+        const newBullets: Bullet[] = [
           {
             id: Date.now(),
-            x: playerPosition.x + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2,
+            x: bulletX,
             y: playerPosition.y,
           },
-        ]);
+        ];
+        if (doubleShot) {
+          newBullets.push({
+            id: Date.now() + 1,
+            x: bulletX - BULLET_WIDTH, // Left bullet
+            y: playerPosition.y,
+          });
+          newBullets.push({
+            id: Date.now() + 2,
+            x: bulletX + BULLET_WIDTH, // Right bullet
+            y: playerPosition.y,
+          });
+        }
+        setBullets(prev => [...prev, ...newBullets]);
       } else {
         setPlayerPosition(prev => {
           let newX = prev.x;
@@ -206,6 +221,7 @@ const App: React.FC = () => {
     }
 
     // 2. Detect collisions between player and objects
+    const collectedPowerUps = new Set<number>();
     for (const obj of objects) {
         if (
             playerPosition.x < obj.x + OBJECT_SIZE &&
@@ -213,15 +229,20 @@ const App: React.FC = () => {
             playerPosition.y < obj.y + OBJECT_SIZE &&
             playerPosition.y + PLAYER_HEIGHT > obj.y
         ) {
-            gameOver();
-            return; // Stop the game loop
+            if (obj.type === 'obstacle') {
+                gameOver();
+                return; // Stop the game loop
+            } else if (obj.type === 'powerup') {
+                collectedPowerUps.add(obj.id);
+                setDoubleShot(true); // Activate double shot
+            }
         }
     }
 
-    // 3. Update objects: filter hits, move down, filter off-screen
+    // 3. Update objects: filter hits, collected power-ups, move down, filter off-screen
     setObjects(prev =>
         prev
-            .filter(obj => !hitObjectIds.has(obj.id))
+            .filter(obj => !hitObjectIds.has(obj.id) && !collectedPowerUps.has(obj.id))
             .map(obj => ({ ...obj, y: obj.y + OBJECT_VERTICAL_SPEED }))
             .filter(obj => obj.y < 100)
     );
